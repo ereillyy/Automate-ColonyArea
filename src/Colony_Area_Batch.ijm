@@ -205,7 +205,7 @@ while (!thresholdAccepted) {
     selectWindow("Preview_Intensity");
     run("Invert");
     
-    // Combine
+    // Combine for intensity+mask preview
     imageCalculator("AND", "Preview_Intensity", "Preview_Mask");
     
     // Apply Fire LUT (mimic manual thresholder)
@@ -264,12 +264,19 @@ for (i = 0; i < wellsFiles.length; i++) {
             setSlice(slice);
             print("  Processing well " + slice + "/" + numSlices);
             
-            // Duplicate this slice twice - one for mask, one for intensity
+            // Duplicate this slice 3 times - one for mask stack, one for mask copy, one for intensity
+            run("Duplicate...", "title=Mask_Well_" + slice);
+            selectWindow(originalTitle);
             run("Duplicate...", "title=Masked_Well_" + slice);
             selectWindow(originalTitle);
             run("Duplicate...", "title=I_Well_" + slice);
             
-            // Create mask
+            // Create mask for the mask stack
+            selectWindow("Mask_Well_" + slice);
+            setThreshold(1, manualThreshold);
+            run("Convert to Mask");
+            
+            // Create mask copy for combining with intensity
             selectWindow("Masked_Well_" + slice);
             setThreshold(1, manualThreshold);
             run("Convert to Mask");
@@ -281,13 +288,25 @@ for (i = 0; i < wellsFiles.length; i++) {
             // Combine: AND keeps intensities but applies mask
             imageCalculator("AND", "I_Well_" + slice, "Masked_Well_" + slice);
             
-            // Clean up mask (keep intensity for now to save...)
+            // invert the mask for display/saving
+            selectWindow("Mask_Well_" + slice);
+            run("Invert");
+            
+            // Clean up the temporary mask copy
             selectWindow("Masked_Well_" + slice);
             close();
         }
         
         // Close original
         selectWindow(originalTitle);
+        close();
+        
+        // Stack all the binary mask (Mask_Well) images
+        run("Images to Stack", "name=mask_" + wellsFilename + " title=Mask_Well");
+        
+        // Save binary mask stack
+        saveAs("Tiff", tmpDir + "mask_" + wellsFilename);
+        print("Saved: " + tmpDir + "mask_" + wellsFilename);
         close();
         
         // Stack all the intensity (I_Well) images
@@ -297,7 +316,7 @@ for (i = 0; i < wellsFiles.length; i++) {
         run("Fire");
         run("Invert LUT");
         
-        // Save
+        // Save intensity+mask stack
         saveAs("Tiff", tmpDir + "thresholded_" + wellsFilename);
         print("Saved: " + tmpDir + "thresholded_" + wellsFilename);
         
@@ -410,7 +429,7 @@ open(resultsPath);
 print("\n=== Processing Complete ===");
 
 // Show completion message
-showMessage("All Done!", "All done! Please check on the well segmentation and thresholding.\nOpening tmp/ directory...");
+showMessage("All Done!", "All done! Please check on the well segmentation and thresholding. Click ok to open...");
 
 // Open tmp directory (cross-platform)
 osName = getInfo("os.name");
