@@ -6,12 +6,22 @@
 
 We present an ImageJ plugin that precisely and rapidly quantifies colony formation assays in different sizes of cell culture plates. The plugin automatically separates all the wells present in the imaged plate, and quantifies the percentages of area that is covered by colonies. This plugin also provides information about the intensity percentage taking into consideration not only the area covered by the colonies, but also the intensity of staining as a direct relation to the number of cells in a colony. By separating all the wells and making a stack of images, our plugin allows a more precise selection of the colonies (thresholding), and automates and standardizes a process that done manually will take large amounts of the valuable time of researchers.
 
+**New in this fork:** A batch processing macro (`Colony_Area_Batch.ijm`) for automated processing of multiple images with a single workflow, significantly reducing processing time for large batches of plates which are analysed with the same parameters.
+
 ### Image Requirements:
 
 1. We recommend that images to be processed should have a resolution higher than 800 dpi, preferably higher than 1200 dpi. The plugin would work on images with lower resolution too, but in such cases the image quality would be very low and the reliability of the measurement might become compromised.
 2. Images should be preferably in a “.tiff” format because this format allows for a higher resolution and image quality. Formats like “.png”, “.jpeg”, “.bmp”, “.gif” are also supported but our tests show that results are not as accurate as with “.tiff” due to the lower image quality in those formats.
 
-## Step I. Image straightening and ROI selection:
+## Workflow Options
+
+**Batch Processing (Multiple Images):** Run `Colony_Area_Batch.ijm` (Plugins → Macros → Run) to process multiple images automatically with one rectangle and threshold.
+
+**Individual Processing (Original Method):** Process images one at a time with manual control (see Steps I & II below).
+
+---
+
+## Step I. Image straightening and ROI selection (Individual Processing):
 
 1. Close all images opened in ImageJ and open the “.tiff” image of the colony formation assay that you want to process.
 2. Go to _Image -> Transform -> Rotate_
@@ -29,7 +39,7 @@ We present an ImageJ plugin that precisely and rapidly quantifies colony formati
 4. Based on visual inspection, select an angle such that the image is nearly horizontal. (With an acceptable error of about 1-1.5 degrees max.) Then click on “OK”.
    After the image has been straightened, use the “Rectangular Selection” tool from the ImageJ toolbar to make a selection of a region of interest (ROI) containing the wells you want to process (See Fig. 2). The selection should be done in such a way that the sides of the rectangle touch the outer walls of the wells. This option allows the user to analyze only a subsection of the plate if desired.
 
-## Step II. Thresholding and colony quantification using Colony_area:
+## Step II. Thresholding and colony quantification using Colony_area (Individual Processing):
 
 1. After you have completed the “Image straightening and ROI selection” steps, go to the plugins menu and select “ColonyArea” (Go to _\_Plugins -> ColonyArea -> Colony area_).
 2. The plugin will ask you to choose the desired postfix for all the names of processed images and result files, plus the directory where you want every resultant file to be saved. So, a save file dialog will appear (See Fig. 3).
@@ -76,16 +86,34 @@ We present an ImageJ plugin that precisely and rapidly quantifies colony formati
 
 **Figure 9:** Run the “Colony measurer” tool to measure the area percent and intensity percent. 9. A table of results will appear in a new window and it will be saved with the name “results_thresholded_wells_name.txt”. The columns in the table correspond to the well number, percentage of area in the well covered by the colonies “colony area percentage”, and another parameter called “colony intensity percentage”. Colony intensity percentage is a parameter that takes into account both the area covered by the colonies and the density of the colonies (intensity of staining for each pixel). It can be used as an independent parameter or it can be used to distinguish two or more plates that have the same cell area but have different amount of cells due to a difference in the density of colonies present. On this table each column is separated by a fixed width (number of spaces) allowing for easy transfer into any data manipulation software.
 
+## Batch Processing Quick Start
+
+1. **Run:** Plugins → Macros → Run → `Colony_Area_Batch.ijm`
+2. **Select folder** containing all images to process
+3. **Configure:** Enter plate format (6/12/24-well) and rectangle coordinates
+4. **Adjust rectangle** on preview image to touch outer well edges (applies to all images)
+5. **Set threshold:** Preview shows 3 images (original, binary mask, intensity+mask). Adjust until colonies are correctly identified with background minimised
+6. **Results:** Automatically saved to `Colony_area_batch_results.tsv` in parent folder
+
+**Output files** (in `tmp/` subdirectory):
+- `wells_*.tif` - Segmented wells (grayscale)
+- `mask_wells_*.tif` - Binary masks (white=colonies)
+- `thresholded_wells_*.tif` - Intensity masks (Fire LUT)
+
+**Failed images** with geometry errors are listed in Log window and skipped.
+
+---
+
 ## Files description
 
 ### Plugin files:
+1. **Colony_area.class**: Class file that actually executes the code written in the Java file. This is a multiplatform file. **Updated to allow batch processing without requiring manual interjection.**
+2. **Colony_Area_Batch.ijm**: Macro file for automated batch processing of multiple images (NEW).
+3. **Colony_thresholder.ijm**: Macro file that automatically determines the correct intensity threshold for each well that separates pixels with cells from those with background.
+4. **Manual_colony_thresholder.ijm**: Macro that calculates the intensity threshold based on an initial input of the user. This can be used in case the user is not satisfied with the automatic result presented by “Colony_thresholder.ijm”.
+5. **Colony_measurer.ijm**: Macro that measures the area percentage covered by cells in each well. It also calculates the intensity percentage based on the area coverage and the intensity at each pixel (See the section “Running the plugin” for details).
 
-1. **Colony_area.class**: Class file that actually executes the code written in the Java file. This is a multiplatform file.
-2. **Colony_thresholder.ijm**: Macro file that automatically determines the correct intensity threshold for each well that separates pixels with cells from those with background.
-3. **Manual_colony_thresholder.ijm**: Macro that calculates the intensity threshold based on an initial input of the user. This can be used in case the user is not satisfied with the automatic result presented by “Colony_thresholder.ijm”.
-4. **Colony_measurer.ijm**: Macro that measures the area percentage covered by cells in each well. It also calculates the intensity percentage based on the area coverage and the intensity at each pixel (See the section “Running the plugin” for details).
-
-### Files saved after running the plugin:
+### Files saved after individual processing:
 
 Typically for a file called “name.tiff”, the following files are stored in the directory/folder that the user has chosen:
 • “wells_name.tiff” – image stack of all the wells to be analyzed.  
@@ -95,7 +123,17 @@ wells.
 applied to each well.  
 • “results_thresholded_wells_name.txt” – text file containing the final results i.e. well number, area percentage, and intensity percentage.  
 [Note: files in the folder that you have chosen to store your files. These files are only temporarily stored there and are needed for internal work of the plugin. At the end, the plugin will remove them from your folder and permanently delete them.]
+### Files saved after batch processing:
 
+Files organized in `tmp/` subdirectory. For each image (e.g., "plate1.jpg"):
+• `wells_plate1.jpg.tif` – Segmented wells (8-bit grayscale)  
+• `mask_wells_plate1.jpg.tif` – Binary masks (white=colonies, black=background)  
+• `thresholded_wells_plate1.jpg.tif` – Intensity masks with Fire LUT
+
+Combined results in parent folder:
+• `Colony_area_batch_results.tsv` – All measurements (tab-separated)
+
+---
 ## Appendix
 
 In this appendix we present you with extra options that have been included in the plugin and that should help you deal with special cases like custom made well plates or when the thresholding is not entirely satisfactory.

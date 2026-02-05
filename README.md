@@ -30,7 +30,7 @@
 
 Clonogenic assays measure the survival and growth of a single mammalian cell into a colony. These colony or focus formation assays are widely used in radiation biology and cancer biology, where they are employed to study resistance of cancer cells to radiation or the transforming potential of genes, respectively.
 
-We have developed _ColonyArea_, an ImageJ-plugin that is optimized to perform standard analysis of colony formation assays conducted in 6- to 24-well dishes. The plugin processes each well individually and determines not the colony number, but the area of the well covered with cells, also taking the intensity into account.
+We have developed _ColonyArea_, an ImageJ-plugin that is optimized to perform standard analysis of colony formation assays conducted in 6- to 24-well dishes. The plugin processes each well individually and determines not the colony number, but the area of the well covered with cells, also taking the intensity into account. New in this fork: A batch processing macro enables automated analysis of multiple plates with consistent parameters.
 
 ## Installation
 
@@ -44,7 +44,8 @@ In the Fiji menu, go to _Help -> Update... -> Manage update sites_ and select th
 
 Download the [latest release](https://github.com/Turku-BioImaging/ColonyArea/releases) from the repository. Copy the following files to your Fiji plugins directory:
 
-- Colony_area.class
+- Colony_area.class (updated to allow batch processing)
+- Colony_Area_Batch.ijm (new)
 - Colony_measurer.ijm
 - Colony_thresolder.ijm
 - Manual_colony_thresholder.ijm
