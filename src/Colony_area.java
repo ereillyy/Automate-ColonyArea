@@ -46,34 +46,85 @@ public class Colony_area implements PlugInFilter {
   public void run(ImageProcessor ip) {
     //(String directory = IJ.getPath(imp);
     String fname = imp.getTitle();
-    IJ.showMessage(
-      "Note",
-      "Please select the directory and the postfix to all images."
-    );
-    SaveDialog sd = new SaveDialog("Save image ...", fname, "");
-    String directory = sd.getDirectory();
-    String fileName = sd.getFileName();
-    Rectangle roi = ip.getRoi();
-
+    
+    // STEP 1: Check if we have macro parameters
+    String options = Macro.getOptions();
+    IJ.log("=== Colony Area Debug ===");
+    IJ.log("Options string: " + (options == null ? "NULL (interactive mode)" : options));
+    
+    String directory = null;
+    String fileName = null;
+    int choice = 0;
+    int w1 = 0;
+    int w2 = 0;
+    boolean batchMode = false;
+    
+    // STEP 2: Parse parameters if in batch mode
+    if (options != null && options.length() > 0) {
+      batchMode = true;
+      IJ.log("BATCH MODE DETECTED - skipping dialogs");
+      
+      directory = Macro.getValue(options, "save", "");
+      if (!directory.endsWith("/") && !directory.endsWith("\\")) {
+        directory = directory + "/";
+      }
+      IJ.log("Directory: " + directory);
+      
+      choice = (int) Double.parseDouble(Macro.getValue(options, "plate", "2"));
+      w1 = (int) Double.parseDouble(Macro.getValue(options, "cols", "0"));
+      w2 = (int) Double.parseDouble(Macro.getValue(options, "rows", "0"));
+      IJ.log("Plate type: " + choice + ", cols: " + w1 + ", rows: " + w2);
+      
+      fileName = fname;
+    } else {
+      IJ.log("INTERACTIVE MODE - showing dialogs");
+      IJ.showMessage(
+        "Note",
+        "Please select the directory and the postfix to all images."
+      );
+      SaveDialog sd = new SaveDialog("Save image ...", fname, "");
+      directory = sd.getDirectory();
+      fileName = sd.getFileName();
+    }
+    
+    // STEP 3: Get ROI from ImagePlus (not ImageProcessor!)
+    Roi roiObj = imp.getRoi();
+    IJ.log("ROI object: " + (roiObj == null ? "NULL - NO ROI SET!" : roiObj.toString()));
+    if (roiObj == null) {
+      IJ.error("Error", "No ROI found. Please make a rectangle selection before running.");
+      return;
+    }
+    
+    Rectangle roi = roiObj.getBounds();
+    IJ.log("ROI bounds: x=" + roi.x + " y=" + roi.y + " w=" + roi.width + " h=" + roi.height);
+    
+    // Set ROI on processor and crop
+    ip.setRoi(roi);
     ip = ip.crop();
+    IJ.log("Image cropped to: " + ip.getWidth() + "x" + ip.getHeight());
 
     ImagePlus impcrop = new ImagePlus("crop", ip);
 
-    impcrop.show();
-    IJ.showMessage(
-      "Note",
-      "The image will be cropped and the template will be constructed."
-    );
+    if (!batchMode) {
+      impcrop.show();
+      IJ.showMessage(
+        "Note",
+        "The image will be cropped and the template will be constructed."
+      );
+    }
 
     ImageConverter iConv = new ImageConverter(impcrop);
 
     iConv.convertToGray8();
 
-    impcrop.show();
+    if (!batchMode) {
+      impcrop.show();
+    }
 
     int width = ip.getWidth();
     int height = ip.getHeight();
-    int w1, w2;
+    IJ.log("Working with cropped dimensions: " + width + "x" + height);
+    
     int i, j;
     double del;
     double e = 5;
@@ -82,12 +133,14 @@ public class Colony_area implements PlugInFilter {
     int n1, n2;
     n1 = 0;
     n2 = 0;
-    int choice = 0;
-    choice =
-      (int) IJ.getNumber(
-        "Input \n 1 for  6 well plate. \n 2 for 12 well plate. \n 3 for 24 well plate. \n 4 for a custom plate to manually change the parameters. \n 0 to exit.",
-        2
-      );
+    
+    if (!batchMode) {
+      choice =
+        (int) IJ.getNumber(
+          "Input \n 1 for  6 well plate. \n 2 for 12 well plate. \n 3 for 24 well plate. \n 4 for a custom plate to manually change the parameters. \n 0 to exit.",
+          2
+        );
+    }
     //Please enter the type of plate to be processed:\nFor 12 well plate (4X3) enter 1\nFor 24 well plate (4X6) enter 2\nFor a custom plate to change the parameters enter 3\To exit enter 0
 
     if (choice == 1) {
@@ -115,12 +168,20 @@ public class Colony_area implements PlugInFilter {
           0.04535
         );
       e = IJ.getNumber("enter the diameter reduction percentage", 15.0);
-    } else {
+    } else if (choice == 0) {
       return;
     }
 
-    w1 = (int) IJ.getNumber("enter number of wells in a row", n1);
-    w2 = (int) IJ.getNumber("enter number of wells in a column", n2);
+    if (!batchMode) {
+      w1 = (int) IJ.getNumber("enter number of wells in a row", n1);
+      w2 = (int) IJ.getNumber("enter number of wells in a column", n2);
+    } else if (w1 == 0 || w2 == 0) {
+      // Use defaults based on plate type
+      w1 = n1;
+      w2 = n2;
+    }
+    
+    IJ.log("Final well configuration: " + w1 + " cols x " + w2 + " rows");
 
     double d1, d1w, d1h, d2, d3;
 
@@ -137,29 +198,44 @@ public class Colony_area implements PlugInFilter {
     d1h = d1h * d11 / d1;
     d1w = d1w * d11 / d1;
     d1 = d11;
-    //IJ.showMessage("ERROR!!", d1+"  "+d1h+"  "+d1w+"  "+d2+"  "+d3+"  "+del+"  "+k2+"  "+k3 );
+    
+    IJ.log("Well diameter calculations:");
+    IJ.log("  d1w (width-based): " + d1w);
+    IJ.log("  d1h (height-based): " + d1h);
+    IJ.log("  difference: " + Math.abs(d1w - d1h));
+    IJ.log("  tolerance (2%): " + (0.02 * Math.sqrt(d1h * d1w)));
 
     if ((d1w - d1h) * (d1w - d1h) > (0.02 * 0.02 * d1h * d1w)) {
       double er;
       if (d1h < d1w) {
         er = (d1w - d1h) * (w1 + 2 * w1 * k2 + w1 * k3 - k3);
-        IJ.showMessage(
-          "ERROR!!",
-          "something is not right, please crop and straighten the image properly, or change the parameters k2 and k3. \nThe approximate max error in cropping is of the order of : " +
-          er +
-          "pixels horizontally."
-        );
+        IJ.log("ERROR: Horizontal geometry mismatch. Error: " + er + " pixels");
+        if (!batchMode) {
+          IJ.showMessage(
+            "ERROR!!",
+            "something is not right, please crop and straighten the image properly, or change the parameters k2 and k3. \nThe approximate max error in cropping is of the order of : " +
+            er +
+            "pixels horizontally."
+          );
+        }
+        IJ.log("ABORTING: Geometry validation failed - horizontal mismatch of " + er + " pixels");
+        return;
       } else {
         er = (d1h - d1w) * (w2 + 2 * w2 * k2 + w2 * k3 - k3);
-        IJ.showMessage(
-          "ERROR!!",
-          "something is not right, please crop and straighten the image properly, or change the parameters k2 and k3. \nThe approximate max error in cropping is of the order of : " +
-          er +
-          "pixels vertically."
-        );
+        IJ.log("ERROR: Vertical geometry mismatch. Error: " + er + " pixels");
+        if (!batchMode) {
+          IJ.showMessage(
+            "ERROR!!",
+            "something is not right, please crop and straighten the image properly, or change the parameters k2 and k3. \nThe approximate max error in cropping is of the order of : " +
+            er +
+            "pixels vertically."
+          );
+        }
+        IJ.log("ABORTING: Geometry validation failed - vertical mismatch of " + er + " pixels");
+        return;
       }
-
-      return;
+    } else {
+      IJ.log("Geometry validation PASSED");
     }
 
     ImageProcessor ipt = new ByteProcessor(width, height);
@@ -177,7 +253,9 @@ public class Colony_area implements PlugInFilter {
     }
     ipt.invert();
 
-    impt.show();
+    if (!batchMode) {
+      impt.show();
+    }
 
     for (int y = 0; y < height; y++) {
       for (int x = 0; x < width; x++) {
@@ -192,9 +270,10 @@ public class Colony_area implements PlugInFilter {
 
     iConv.convertToGray8();
 
-    impcrop.show();
-    //IJ.saveAs(impcrop, "Tiff",directory+"identified_wells_"+fileName);
-    IJ.wait(300);
+    if (!batchMode) {
+      impcrop.show();
+      IJ.wait(300);
+    }
     impcrop.close();
 
     ImageProcessor ipcrop = new ByteProcessor((int) d1w, (int) d1h);
@@ -229,10 +308,25 @@ public class Colony_area implements PlugInFilter {
       iConvi_1.convertToGray8();
     }
 
-    impwell1.show();
+    if (!batchMode) {
+      impwell1.show();
+    }
 
     IJ.saveAs(impwell1, "Tiff", directory + "wells_" + fileName);
+    IJ.log("Saved wells to: " + directory + "wells_" + fileName);
 
-    IJ.run(impwell1, "Colony thresolder", "");
+    // Only run Colony thresolder in interactive mode
+    // In batch mode, user can run it separately if needed
+    if (!batchMode) {
+      IJ.run(impwell1, "Colony thresolder", "");
+    } else {
+      IJ.log("BATCH MODE: Colony_area is skipping automatic Colony thresolder - run separately if needed");
+      // Close the wells image to free memory
+      impwell1.close();
+      // Also close any other open images to prevent locks
+      imp.changes = false; // Prevent "save changes" dialog
+      imp.close();
+      IJ.log("Closed all images to prevent locks");
+    }
   }
 }
