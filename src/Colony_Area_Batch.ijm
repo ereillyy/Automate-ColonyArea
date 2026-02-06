@@ -107,9 +107,14 @@ for (i = 0; i < imageFiles.length; i++) {
     print(filename);
     
     // Delete any existing wells file to ensure fresh processing
-    wellsFilePath = tmpDir + "wells_" + filename + ".tif";
+    // Check for .tif version (plugin converts to .tif after saving)
+    wellsFilePath = tmpDir + "wells_" + filename;
+    wellsFilePathTif = tmpDir + "wells_" + replace(filename, "\\.[^.]+$", ".tif");
     if (File.exists(wellsFilePath)) {
         File.delete(wellsFilePath);
+    }
+    if (File.exists(wellsFilePathTif)) {
+        File.delete(wellsFilePathTif);
     }
     
     // Open the image
@@ -122,12 +127,12 @@ for (i = 0; i < imageFiles.length; i++) {
     // Temporarily exit batch mode for Colony area to work properly
     setBatchMode(false);
     
-    // Run Colony area plugin with batch parameters
-    run("Colony area", "save=" + tmpDir + " plate=" + plateNum + " cols=" + plateCols + " rows=" + plateRows);
+    // Run Colony area plugin with batch parameters (use brackets to handle spaces in paths)
+    run("Colony area", "save=[" + tmpDir + "] plate=" + plateNum + " cols=" + plateCols + " rows=" + plateRows);
     
-    // Check if wells file was created (indicates success)
-    if (!File.exists(wellsFilePath)) {
-        print("FAILED: " + filename + " - no wells file created (likely geometry validation error)");
+    // Check if wells file was created (plugin converts to .tif)
+    if (!File.exists(wellsFilePathTif)) {
+        print("FAILED: " + filename + " - no wells file created");
         failedImages[failedCount] = filename;
         failedCount++;
     } else {
@@ -148,12 +153,12 @@ for (i = 0; i < imageFiles.length; i++) {
 // Report failures
 if (failedCount > 0) {
     print("\n=== FAILED IMAGES (" + failedCount + " of " + imageFiles.length + ") ===");
-    print("The following images failed geometry validation:");
+    print("The following images failed processing:");
     for (i = 0; i < failedCount; i++) {
         print("  - " + failedImages[i]);
     }
-    print("Check the log above for specific geometry error messages (horizontal/vertical mismatch).");
-    print("You may need to adjust the rectangle selection or check image alignment.");
+    print("Check the log above for specific error messages.");
+    print("Common issues: geometry validation errors (horizontal/vertical mismatch), incorrect rectangle selection, or image alignment problems.");
 }
 
 print("\n=== Step 2: Running Manual Thresholding ===");
