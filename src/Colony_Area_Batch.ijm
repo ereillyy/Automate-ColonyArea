@@ -423,9 +423,6 @@ if (isOpen("Results")) {
     run("Close");
 }
 
-// Open combined results file
-open(resultsPath);
-
 print("\n=== Processing Complete ===");
 
 // Show completion message
